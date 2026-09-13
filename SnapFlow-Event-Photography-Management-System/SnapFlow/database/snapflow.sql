@@ -1,12 +1,7 @@
--- SnapFlow Database Schema + Sample Data
--- MySQL 8
 
 CREATE DATABASE IF NOT EXISTS snapflow CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE snapflow;
 
--- =====================================================
--- USERS
--- =====================================================
 CREATE TABLE users (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(100) NOT NULL UNIQUE,
@@ -20,9 +15,6 @@ CREATE TABLE users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- =====================================================
--- PACKAGES & ADDONS
--- =====================================================
 CREATE TABLE packages (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -43,9 +35,6 @@ CREATE TABLE add_ons (
     is_active BOOLEAN DEFAULT TRUE
 );
 
--- =====================================================
--- BOOKINGS & EVENTS
--- =====================================================
 CREATE TABLE bookings (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     booking_ref VARCHAR(20) NOT NULL UNIQUE,
@@ -76,9 +65,6 @@ CREATE TABLE booking_add_ons (
     FOREIGN KEY (add_on_id) REFERENCES add_ons(id)
 );
 
--- =====================================================
--- PHOTOGRAPHER ASSIGNMENTS
--- =====================================================
 CREATE TABLE photographer_assignments (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     booking_id BIGINT NOT NULL,
@@ -92,9 +78,6 @@ CREATE TABLE photographer_assignments (
     UNIQUE KEY uk_booking_photographer (booking_id, photographer_id)
 );
 
--- =====================================================
--- CHANGE REQUESTS
--- =====================================================
 CREATE TABLE change_requests (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     booking_id BIGINT NOT NULL,
@@ -111,9 +94,6 @@ CREATE TABLE change_requests (
     FOREIGN KEY (reviewed_by) REFERENCES users(id)
 );
 
--- =====================================================
--- PAYMENTS
--- =====================================================
 CREATE TABLE payments (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     booking_id BIGINT NOT NULL,
@@ -130,9 +110,6 @@ CREATE TABLE payments (
     FOREIGN KEY (verified_by) REFERENCES users(id)
 );
 
--- =====================================================
--- GALLERIES & PHOTOS (Composition)
--- =====================================================
 CREATE TABLE galleries (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     booking_id BIGINT NOT NULL UNIQUE,
@@ -155,9 +132,6 @@ CREATE TABLE photos (
     FOREIGN KEY (gallery_id) REFERENCES galleries(id) ON DELETE CASCADE
 );
 
--- =====================================================
--- EQUIPMENT (Aggregation)
--- =====================================================
 CREATE TABLE equipment (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -179,9 +153,6 @@ CREATE TABLE equipment_allocations (
     FOREIGN KEY (photographer_id) REFERENCES users(id)
 );
 
--- =====================================================
--- NOTIFICATIONS
--- =====================================================
 CREATE TABLE notifications (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT NOT NULL,
@@ -195,9 +166,6 @@ CREATE TABLE notifications (
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
--- =====================================================
--- ACTIVITY LOG
--- =====================================================
 CREATE TABLE activity_logs (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT,
@@ -209,12 +177,7 @@ CREATE TABLE activity_logs (
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
--- =====================================================
--- SAMPLE DATA
--- =====================================================
 
--- Password for all demo accounts: Password1!
--- BCrypt hash of "Password1!"
 INSERT INTO users (email, password, first_name, last_name, phone, role) VALUES
 ('thisaradewdunu9@gmail.com', '200535301542', 'Nimal', 'Perera', '0771234567', 'COMPANY_DIRECTOR'),
 ('ops@lankamoments.lk', '$2a$10$KnPmlqRjgGvsFSyNJXwzRePogUWGG3Vx7VpEJhQhmNM7TEx5B8ROS', 'Saman', 'Silva', '0772345678', 'OPERATIONS_MANAGER'),
@@ -252,7 +215,6 @@ INSERT INTO equipment (name, type, serial_number, status) VALUES
 ('Godox AD200', 'Lighting', 'LT-AD200-001', 'AVAILABLE'),
 ('DJI Mavic 3', 'Drone', 'DR-M3-001', 'AVAILABLE');
 
--- Sample Bookings
 INSERT INTO bookings (booking_ref, customer_id, package_id, event_date, event_time, venue, event_type, status, total_amount, deposit_amount, balance_amount) VALUES
 ('SF-2026-001', 8, 2, '2026-09-15', '09:00:00', 'Galle Face Hotel, Colombo', 'Wedding', 'CONFIRMED', 145000.00, 50000.00, 95000.00),
 ('SF-2026-002', 9, 1, '2026-08-28', '14:00:00', 'Cinnamon Grand, Colombo', 'Wedding', 'ASSIGNED', 85000.00, 30000.00, 55000.00),
