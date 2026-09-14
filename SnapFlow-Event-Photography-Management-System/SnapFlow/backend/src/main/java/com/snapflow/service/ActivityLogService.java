@@ -1,6 +1,7 @@
 package com.snapflow.service;
 
 import com.snapflow.entity.ActivityLog;
+import com.snapflow.entity.User;
 import com.snapflow.repository.ActivityLogRepository;
 import com.snapflow.repository.UserRepository;
 import lombok.RequiredArgsConstructor;

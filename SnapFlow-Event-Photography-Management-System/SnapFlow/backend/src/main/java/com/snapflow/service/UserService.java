@@ -1,5 +1,7 @@
 package com.snapflow.service;
 
+import com.snapflow.dto.response.UserResponse;
+import com.snapflow.entity.User;
 import com.snapflow.enums.Role;
 import com.snapflow.exception.ResourceNotFoundException;
 import com.snapflow.repository.UserRepository;

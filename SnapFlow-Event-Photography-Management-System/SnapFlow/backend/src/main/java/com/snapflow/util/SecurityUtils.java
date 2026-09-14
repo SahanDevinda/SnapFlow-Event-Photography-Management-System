@@ -1,5 +1,6 @@
 package com.snapflow.util;
 
+import com.snapflow.entity.User;
 import com.snapflow.exception.UnauthorizedException;
 import com.snapflow.repository.UserRepository;
 import lombok.RequiredArgsConstructor;

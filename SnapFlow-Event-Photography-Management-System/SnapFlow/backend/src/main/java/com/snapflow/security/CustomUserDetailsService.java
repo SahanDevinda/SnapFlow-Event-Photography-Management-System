@@ -1,5 +1,6 @@
 package com.snapflow.security;
 
+import com.snapflow.entity.User;
 import com.snapflow.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
