@@ -1,5 +1,9 @@
 package com.snapflow.service;
 
+import com.snapflow.entity.Booking;
+import com.snapflow.entity.Equipment;
+import com.snapflow.entity.EquipmentAllocation;
+import com.snapflow.entity.User;
 import com.snapflow.enums.EquipmentStatus;
 import com.snapflow.exception.BadRequestException;
 import com.snapflow.exception.ResourceNotFoundException;
