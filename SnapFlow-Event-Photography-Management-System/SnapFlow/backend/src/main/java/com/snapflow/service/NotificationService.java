@@ -1,5 +1,7 @@
 package com.snapflow.service;
 
+import com.snapflow.entity.Notification;
+import com.snapflow.entity.User;
 import com.snapflow.exception.ResourceNotFoundException;
 import com.snapflow.repository.NotificationRepository;
 import com.snapflow.repository.UserRepository;

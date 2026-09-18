@@ -1,5 +1,6 @@
 package com.snapflow.repository;
 
+import com.snapflow.entity.Equipment;
 import com.snapflow.enums.EquipmentStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;

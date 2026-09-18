@@ -1,5 +1,9 @@
 package com.snapflow.service;
 
+import com.snapflow.dto.request.LoginRequest;
+import com.snapflow.dto.request.RegisterRequest;
+import com.snapflow.dto.response.AuthResponse;
+import com.snapflow.entity.User;
 import com.snapflow.enums.Role;
 import com.snapflow.exception.BadRequestException;
 import com.snapflow.exception.ConflictException;
