@@ -1,0 +1,10 @@
+package com.snapflow.enums;
+
+public enum Role {
+    CUSTOMER,
+    CUSTOMER_RELATIONS_OFFICER,
+    OPERATIONS_MANAGER,
+    PHOTOGRAPHER,
+    FINANCE_EXECUTIVE,
+    COMPANY_DIRECTOR
+}

@@ -1,0 +1,79 @@
+erDiagram
+    users ||--o{ bookings : places
+    users ||--o{ assignments : assigned
+    users ||--o{ activity_logs : triggers
+    packages ||--o{ bookings : includes
+    bookings ||--o{ booking_add_ons : contains
+    add_ons ||--o{ booking_add_ons : chosen
+    bookings ||--o{ payments : generates
+    bookings ||--o{ change_requests : requests
+    bookings ||--o| galleries : produces
+    galleries ||--o{ photos : contains
+    bookings ||--o{ assignments : assigns
+    equipment ||--o{ assignments : allocates
+    bookings ||--o{ feedback : receives
+    packages ||--o{ reviews : reviewed
+
+    users {
+        bigint id PK
+        varchar email UK
+        varchar password
+        varchar full_name
+        varchar phone
+        varchar role
+        boolean active
+        timestamp created_at
+    }
+
+    packages {
+        bigint id PK
+        varchar name
+        varchar category
+        decimal price
+        int hours_included
+        int photographers_count
+        boolean active
+    }
+
+    bookings {
+        bigint id PK
+        varchar booking_ref UK
+        bigint customer_id FK
+        bigint package_id FK
+        date event_date
+        time start_time
+        time end_time
+        varchar venue
+        varchar status
+        decimal total_amount
+        decimal paid_amount
+        decimal balance_remaining
+    }
+
+    payments {
+        bigint id PK
+        bigint booking_id FK
+        varchar receipt_number UK
+        decimal amount
+        varchar payment_method
+        varchar status
+        varchar receipt_url
+    }
+
+    galleries {
+        bigint id PK
+        bigint booking_id FK
+        varchar title
+        varchar access_code UK
+        boolean is_watermarked
+        varchar status
+    }
+
+    photos {
+        bigint id PK
+        bigint gallery_id FK
+        varchar photo_url
+        varchar caption
+        boolean is_cover_photo
+        boolean is_proof_selected
+    }

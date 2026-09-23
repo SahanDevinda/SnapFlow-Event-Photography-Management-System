@@ -1,0 +1,32 @@
+# Operating System Files
+.DS_Store
+Thumbs.db
+
+# Backend Build & Runtime
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+backend/*.log
+backend/uploads/
+backend/.flattened-pom.xml
+
+# Frontend Build & Runtime
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+frontend/.env.*.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# IDE & Editor Files
+.idea/
+*.iml
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Packaging Outputs
+SnapFlow-Complete.zip

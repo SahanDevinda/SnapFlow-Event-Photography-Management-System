@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  # Microsoft SQL Server Database Service
+  sqlserver_db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: snapflow_sqlserver
+    restart: always
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "YourStrong!Passw0rd"
+      MSSQL_PID: "Express"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    # SnapFlow connects to a database called snapflow_db, which SQL Server
+    # does not auto-create like MySQL's createDatabaseIfNotExist. Create it
+    # once via SSMS or: docker exec -it snapflow_sqlserver /opt/mssql-tools/bin/sqlcmd
+    #   -S localhost -U sa -P 'YourStrong!Passw0rd' -Q "CREATE DATABASE snapflow_db"
+
+  # Spring Boot Backend Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: snapflow_backend
+    restart: always
+    depends_on:
+      - sqlserver_db
+    environment:
+      SPRING_DATASOURCE_URL: "jdbc:sqlserver://sqlserver_db:1433;databaseName=snapflow_db;encrypt=true;trustServerCertificate=true"
+      SPRING_DATASOURCE_USERNAME: sa
+      SPRING_DATASOURCE_PASSWORD: "YourStrong!Passw0rd"
+      JWT_SECRET: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+    ports:
+      - "8080:8080"
+
+  # React + Vite Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: snapflow_frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+
+volumes:
+  sqlserver_data:
