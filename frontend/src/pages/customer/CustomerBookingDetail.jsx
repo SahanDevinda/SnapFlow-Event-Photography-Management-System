@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api, { listOf } from '../../services/api';
 import { ProtectedFileLink } from '../../components/common/ProtectedImage';
@@ -8,9 +8,12 @@ import Badge from '../../components/common/Badge';
 import Modal from '../../components/common/Modal';
 import Input from '../../components/common/Input';
 import LoadingSkeleton from '../../components/common/LoadingSkeleton';
+import BookingCancellationModal from '../../components/bookings/BookingCancellationModal';
+import BookingCancellationDetails from '../../components/bookings/BookingCancellationDetails';
 import { useToast } from '../../context/ToastContext';
 import { formatLKR, formatDate } from '../../utils/formatters';
-import { Calendar, Clock, MapPin, Upload, AlertCircle, CheckCircle, FileText, Image, ChevronLeft } from 'lucide-react';
+import { canCustomerCancelBooking, getCancellationErrorMessage } from '../../utils/bookingCancellation';
+import { Upload, ChevronLeft, XCircle } from 'lucide-react';
 
 export default function CustomerBookingDetail() {
   const { id } = useParams();
@@ -23,6 +26,10 @@ export default function CustomerBookingDetail() {
   // Modals
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
   const [isChangeModalOpen, setIsChangeModalOpen] = useState(false);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancellationError, setCancellationError] = useState('');
+  const cancellationInFlight = useRef(false);
 
   // Payment Form
   const [payForm, setPayForm] = useState({
@@ -40,17 +47,33 @@ export default function CustomerBookingDetail() {
     proposedDate: '',
     proposedStartTime: '',
     proposedEndTime: '',
+    proposedVenue: '',
     reason: ''
   });
   const [requestingChange, setRequestingChange] = useState(false);
 
+  // Customer Change Request CRUD
+  const [changeRequests, setChangeRequests] = useState([]);
+  const [editingChangeRequest, setEditingChangeRequest] = useState(null);
+  const [deletingChangeRequest, setDeletingChangeRequest] = useState(false);
+
+  const fetchChangeRequests = async () => {
+    try {
+      const res = await api.get(`/change-requests/booking/${id}`);
+      setChangeRequests(listOf(res));
+    } catch (err) {
+      console.error('Failed to load change requests:', err);
+    }
+  };
+
   useEffect(() => {
     fetchDetails();
+    fetchChangeRequests();
   }, [id]);
 
-  const fetchDetails = async () => {
+  const fetchDetails = async ({ background = false, afterCancellation = false } = {}) => {
     try {
-      setLoading(true);
+      if (!background) setLoading(true);
       const [bookRes, payRes] = await Promise.all([
         api.get(`/bookings/${id}`),
         api.get(`/payments/booking/${id}`)
@@ -61,9 +84,44 @@ export default function CustomerBookingDetail() {
         setPayForm(prev => ({ ...prev, amount: bookRes.data.balanceAmount || '' }));
       }
     } catch (err) {
-      toast.error('Failed to load booking details.');
+      if (afterCancellation) {
+        toast.warning('Your booking was cancelled, but the latest details could not be refreshed. Please reload this page.');
+      } else {
+        toast.error('Failed to load booking details.');
+      }
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
+    }
+  };
+
+  const handleCancellation = async (request) => {
+    if (cancellationInFlight.current) return;
+    if (!canCustomerCancelBooking(booking)) {
+      setCancellationError('This booking can no longer be cancelled. Please refresh its details.');
+      return;
+    }
+    cancellationInFlight.current = true;
+    setCancelling(true);
+    setCancellationError('');
+    try {
+      const result = await api.post(`/bookings/${id}/cancel`, request);
+      // Keep the confirmed server outcome visible even if the subsequent refresh fails.
+      setBooking((previous) => ({ ...previous, ...result.data, status: 'CANCELLED', customerCanCancel: false }));
+      setIsCancelModalOpen(false);
+      setIsChangeModalOpen(false);
+      setIsPayModalOpen(false);
+      toast.success('Booking cancelled successfully.');
+      await fetchDetails({ background: true, afterCancellation: true });
+    } catch (err) {
+      const message = getCancellationErrorMessage(err);
+      setCancellationError(message);
+      toast.error(message);
+      if (['BOOKING_ALREADY_CANCELLED', 'BOOKING_CANCELLATION_NOT_ALLOWED', 'EVENT_ALREADY_STARTED'].includes(err.response?.data?.code)) {
+        await fetchDetails({ background: true });
+      }
+    } finally {
+      cancellationInFlight.current = false;
+      setCancelling(false);
     }
   };
 
@@ -87,6 +145,8 @@ export default function CustomerBookingDetail() {
       toast.success('Payment receipt submitted successfully! Pending verification by finance.');
       setIsPayModalOpen(false);
       fetchDetails();
+      await fetchChangeRequests();
+      setEditingChangeRequest(null);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to submit payment receipt.');
     } finally {
@@ -96,23 +156,63 @@ export default function CustomerBookingDetail() {
 
   const handleChangeRequestSubmit = async (e) => {
     e.preventDefault();
-    if (!changeForm.reason) {
+    const reasonText = changeForm.reason?.trim();
+    if (!reasonText) {
       toast.error('Please describe the reason for your change request.');
+      return;
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (changeForm.proposedDate && changeForm.proposedDate < todayStr) {
+      toast.error('Proposed date cannot be in the past.');
+      return;
+    }
+
+    if (changeForm.proposedDate === todayStr && changeForm.proposedStartTime) {
+      const [h, m] = changeForm.proposedStartTime.split(':');
+      const now = new Date();
+      const st = new Date();
+      st.setHours(parseInt(h, 10), parseInt(m, 10), 0, 0);
+      if (st < now) {
+        toast.error('Proposed start time cannot be in the past for today.');
+        return;
+      }
+    }
+
+    const venue = changeForm.proposedVenue?.trim() || null;
+    if (venue && venue.length > 255) {
+      toast.error('Proposed venue cannot exceed 255 characters.');
       return;
     }
 
     try {
       setRequestingChange(true);
-      // Backend route: POST /change-requests/booking/{bookingId}
-      await api.post(`/change-requests/booking/${id}`, {
+      const description = `[${changeForm.requestType}] ${reasonText}`.slice(0, 2000);
+      const payload = {
         proposedDate: changeForm.proposedDate || null,
         proposedStartTime: changeForm.proposedStartTime || null,
-        proposedVenue: changeForm.proposedVenue || null,
-        description: `[${changeForm.requestType}] ${changeForm.reason}`
-      });
+        proposedVenue: venue,
+        description
+      };
+
+      if (editingChangeRequest) {
+        await api.put(`/change-requests/${editingChangeRequest.id}`, payload);
+      } else {
+        await api.post(`/change-requests/booking/${id}`, payload);
+      }
       toast.success('Change request sent to operations team for review.');
       setIsChangeModalOpen(false);
+      setChangeForm({
+        requestType: 'DATE_CHANGE',
+        proposedDate: '',
+        proposedStartTime: '',
+        proposedEndTime: '',
+        proposedVenue: '',
+        reason: ''
+      });
       fetchDetails();
+      await fetchChangeRequests();
+      setEditingChangeRequest(null);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to submit change request.');
     } finally {
@@ -120,6 +220,36 @@ export default function CustomerBookingDetail() {
     }
   };
 
+  const handleEditChangeRequest = (request) => {
+    const description = request.description || '';
+    const match = description.match(/^\[([A-Z_]+)\]\s*(.*)$/);
+
+    setEditingChangeRequest(request);
+    setChangeForm({
+      requestType: match?.[1] || 'OTHER',
+      proposedDate: request.proposedDate || '',
+      proposedStartTime: request.proposedStartTime || '',
+      proposedEndTime: '',
+      proposedVenue: request.proposedVenue || '',
+      reason: match?.[2] || description
+    });
+    setIsChangeModalOpen(true);
+  };
+
+  const handleDeleteChangeRequest = async (requestId) => {
+    if (!window.confirm('Delete this pending change request?')) return;
+
+    try {
+      setDeletingChangeRequest(true);
+      await api.delete(`/change-requests/${requestId}`);
+      toast.success('Change request deleted successfully.');
+      await fetchChangeRequests();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete change request.');
+    } finally {
+      setDeletingChangeRequest(false);
+    }
+  };
   if (loading) {
     return <LoadingSkeleton count={4} className="h-40" />;
   }
@@ -138,22 +268,27 @@ export default function CustomerBookingDetail() {
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl border border-navy-100 shadow-sm">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-serif font-bold text-navy-900">{booking.packageName}</h1>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-serif font-bold text-navy-900 break-words">{booking.packageName}</h1>
             <Badge status={booking.status} />
           </div>
           <p className="text-xs text-navy-500 font-mono mt-1">Ref ID: {booking.bookingRef}</p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 min-w-0 w-full sm:w-auto sm:justify-end">
+          {canCustomerCancelBooking(booking) && (
+            <Button type="button" variant="dangerOutline" size="sm" icon={XCircle} onClick={() => { setCancellationError(''); setIsCancelModalOpen(true); }}>
+              Cancel Booking
+            </Button>
+          )}
           {booking.status !== 'CANCELLED' && booking.status !== 'COMPLETED' && (
             <Button variant="secondary" size="sm" onClick={() => setIsChangeModalOpen(true)}>
               Request Change
             </Button>
           )}
-          {booking.balanceAmount > 0 && (
-            <Button variant="gold" size="sm" icon={Upload} onClick={() => setIsPayModalOpen(true)}>
+          {booking.status !== 'CANCELLED' && booking.balanceAmount > 0 && (
+            <Button className="!bg-red-600 !text-black" size="sm" icon={Upload} onClick={() => setIsPayModalOpen(true)}>
               Upload Payment Receipt
             </Button>
           )}
@@ -163,6 +298,7 @@ export default function CustomerBookingDetail() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Event Details */}
         <div className="lg:col-span-2 space-y-6">
+          <BookingCancellationDetails booking={booking} showActor={false} showPayments={false} />
           <Card title="Event Details">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               <div>
@@ -177,11 +313,7 @@ export default function CustomerBookingDetail() {
                 <p className="text-xs text-navy-400 font-semibold uppercase">Venue</p>
                 <p className="font-semibold text-navy-900 mt-0.5">{booking.venue}</p>
               </div>
-              <div>
-                <p className="text-xs text-navy-400 font-semibold uppercase">Event Type</p>
-                <p className="font-semibold text-navy-900 mt-0.5">{booking.eventType}</p>
-              </div>
-              <div>
+              <div className="sm:col-span-2">
                 <p className="text-xs text-navy-400 font-semibold uppercase">Duration</p>
                 <p className="font-semibold text-navy-900 mt-0.5">
                   {booking.durationHours ? `${booking.durationHours} hrs` : 'N/A'}
@@ -233,7 +365,7 @@ export default function CustomerBookingDetail() {
                         <Badge status={p.status} />
                       </div>
                       <p className="text-xs text-navy-500 mt-0.5">
-                        {p.paymentType} • Ref: {p.transactionReference || 'N/A'} • {formatDate(p.createdAt)}
+                        {p.paymentType} â€¢ Ref: {p.transactionReference || 'N/A'} â€¢ {formatDate(p.createdAt)}
                       </p>
                     </div>
                     {p.receiptOriginalName && (
@@ -250,7 +382,81 @@ export default function CustomerBookingDetail() {
 
         {/* Financial Summary & Actions */}
         <div className="space-y-6">
-          <Card title="Payment Summary">
+          {/* My Change Requests - CRUD */}
+        <Card title="My Change Requests">
+          {changeRequests.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              No change requests submitted for this booking.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {changeRequests.map((request) => (
+                <div
+                  key={request.id}
+                  className="rounded-xl border border-gray-200 p-4"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-navy-900">
+                          Request #{request.id}
+                        </span>
+
+                        <span className="rounded-full border px-2 py-1 text-xs font-semibold">
+                          {request.status}
+                        </span>
+                      </div>
+
+                      <p className="text-sm text-gray-700">
+                        {request.description}
+                      </p>
+
+                      {request.proposedDate && (
+                        <p className="text-sm text-gray-600">
+                          Proposed Date: {request.proposedDate}
+                        </p>
+                      )}
+
+                      {request.proposedStartTime && (
+                        <p className="text-sm text-gray-600">
+                          Proposed Time: {request.proposedStartTime}
+                        </p>
+                      )}
+
+                      {request.proposedVenue && (
+                        <p className="text-sm text-gray-600">
+                          Proposed Venue: {request.proposedVenue}
+                        </p>
+                      )}
+                    </div>
+
+                    {request.status === 'PENDING' && (
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => handleEditChangeRequest(request)}
+                        >
+                          Edit
+                        </Button>
+
+                        <Button
+                          type="button"
+                          variant="danger"
+                          disabled={deletingChangeRequest}
+                          onClick={() => handleDeleteChangeRequest(request.id)}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+        <Card title="Payment Summary">
             <div className="space-y-3 text-sm">
               <div className="flex justify-between text-navy-600">
                 <span>Total Package Price:</span>
@@ -268,7 +474,7 @@ export default function CustomerBookingDetail() {
               </div>
             </div>
 
-            {booking.balanceAmount > 0 && (
+            {booking.status !== 'CANCELLED' && booking.balanceAmount > 0 && (
               <div className="mt-4 p-3 bg-amber-50 rounded-xl border border-amber-200/60 text-xs text-amber-900">
                 <p className="font-semibold mb-1">Bank Transfer Details</p>
                 <p>Commercial Bank of Ceylon</p>
@@ -292,6 +498,16 @@ export default function CustomerBookingDetail() {
           )}
         </div>
       </div>
+
+      <BookingCancellationModal
+        isOpen={isCancelModalOpen}
+        onClose={() => { if (!cancellationInFlight.current) setIsCancelModalOpen(false); }}
+        onConfirm={handleCancellation}
+        booking={booking}
+        payments={payments}
+        submitting={cancelling}
+        error={cancellationError}
+      />
 
       {/* Payment Receipt Modal */}
       <Modal
@@ -372,7 +588,7 @@ export default function CustomerBookingDetail() {
             </select>
           </div>
 
-          {changeForm.requestType === 'DATE_CHANGE' && (
+          {(changeForm.requestType === 'DATE_CHANGE' || changeForm.requestType === 'OTHER') && (
             <Input
               label="Proposed New Date"
               type="date"
@@ -382,26 +598,31 @@ export default function CustomerBookingDetail() {
             />
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          {(changeForm.requestType === 'DATE_CHANGE' || changeForm.requestType === 'TIME_CHANGE' || changeForm.requestType === 'OTHER') && (
             <Input
-              label="New Start Time"
+              label="Proposed Start Time"
               type="time"
               value={changeForm.proposedStartTime}
               onChange={e => setChangeForm({ ...changeForm, proposedStartTime: e.target.value })}
             />
+          )}
+
+          {(changeForm.requestType === 'VENUE_CHANGE' || changeForm.requestType === 'OTHER') && (
             <Input
-              label="New End Time"
-              type="time"
-              value={changeForm.proposedEndTime}
-              onChange={e => setChangeForm({ ...changeForm, proposedEndTime: e.target.value })}
+              label="Proposed New Venue"
+              placeholder="e.g. Hilton Colombo Ballroom"
+              maxLength={255}
+              value={changeForm.proposedVenue}
+              onChange={e => setChangeForm({ ...changeForm, proposedVenue: e.target.value })}
             />
-          </div>
+          )}
 
           <div>
             <label className="block text-xs font-semibold text-navy-700 uppercase tracking-wider mb-1">Reason for Request *</label>
             <textarea
               rows="3"
               required
+              maxLength={2000}
               placeholder="Explain the reason for this change..."
               value={changeForm.reason}
               onChange={e => setChangeForm({ ...changeForm, reason: e.target.value })}
@@ -413,3 +634,10 @@ export default function CustomerBookingDetail() {
     </div>
   );
 }
+
+
+
+
+
+
+

@@ -3,6 +3,7 @@ import api, { listOf } from '../../services/api';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Badge from '../../components/common/Badge';
+import Modal from '../../components/common/Modal';
 import LoadingSkeleton from '../../components/common/LoadingSkeleton';
 import { useToast } from '../../context/ToastContext';
 import { formatDate } from '../../utils/formatters';
@@ -11,7 +12,9 @@ export default function CROChangeRequests() {
   const toast = useToast();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [reviewing, setReviewing] = useState(null);
+  const [reviewModal, setReviewModal] = useState(null); // { id, status, bookingRef }
+  const [reviewNotes, setReviewNotes] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   useEffect(() => {
     fetchRequests();
@@ -29,19 +32,27 @@ export default function CROChangeRequests() {
     }
   };
 
-  const reviewRequest = async (id, status) => {
+  const handleOpenReview = (r, status) => {
+    setReviewModal({ id: r.id, status, bookingRef: r.bookingRef });
+    setReviewNotes('');
+  };
+
+  const submitReview = async () => {
+    if (!reviewModal) return;
     try {
-      setReviewing(id);
-      await api.post(`/change-requests/${id}/review`, {
-        status,
-        reviewNotes: `Reviewed by CRO: ${status}`
+      setSubmittingReview(true);
+      const notes = reviewNotes.trim() || `Reviewed by CRO: ${reviewModal.status}`;
+      await api.post(`/change-requests/${reviewModal.id}/review`, {
+        status: reviewModal.status,
+        reviewNotes: notes.slice(0, 2000)
       });
-      toast.success(`Change request ${status === 'APPROVED' ? 'approved' : 'rejected'} successfully.`);
+      toast.success(`Change request ${reviewModal.status === 'APPROVED' ? 'approved' : 'rejected'} successfully.`);
+      setReviewModal(null);
       fetchRequests();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to update change request.');
     } finally {
-      setReviewing(null);
+      setSubmittingReview(false);
     }
   };
 
@@ -92,18 +103,16 @@ export default function CROChangeRequests() {
                     <Button
                       variant="gold"
                       size="xs"
-                      loading={reviewing === r.id}
-                      onClick={() => reviewRequest(r.id, 'APPROVED')}
+                      onClick={() => handleOpenReview(r, 'APPROVED')}
                     >
-                      Approve
+                      Approve...
                     </Button>
                     <Button
                       variant="danger"
                       size="xs"
-                      loading={reviewing === r.id}
-                      onClick={() => reviewRequest(r.id, 'REJECTED')}
+                      onClick={() => handleOpenReview(r, 'REJECTED')}
                     >
-                      Reject
+                      Reject...
                     </Button>
                   </div>
                 )}
@@ -125,6 +134,50 @@ export default function CROChangeRequests() {
           </div>
         )}
       </Card>
+
+      {/* Review Modal */}
+      {reviewModal && (
+        <Modal
+          isOpen={true}
+          onClose={() => setReviewModal(null)}
+          title={`${reviewModal.status === 'APPROVED' ? 'Approve' : 'Reject'} Change Request for ${reviewModal.bookingRef}`}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setReviewModal(null)} disabled={submittingReview}>
+                Cancel
+              </Button>
+              <Button
+                variant={reviewModal.status === 'APPROVED' ? 'gold' : 'danger'}
+                onClick={submitReview}
+                loading={submittingReview}
+              >
+                Confirm {reviewModal.status === 'APPROVED' ? 'Approval' : 'Rejection'}
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-3 text-sm">
+            <p className="text-navy-700">
+              {reviewModal.status === 'APPROVED'
+                ? 'Approving will apply the requested changes (date, time, venue, package, add-ons) directly to the booking and recalculate charges.'
+                : 'Rejecting will decline the request and retain the current booking details.'}
+            </p>
+            <div>
+              <label className="block text-xs font-semibold text-navy-700 uppercase tracking-wider mb-1">
+                Review Notes {reviewModal.status === 'REJECTED' && <span className="text-rose-500">*</span>}
+              </label>
+              <textarea
+                rows="3"
+                value={reviewNotes}
+                onChange={e => setReviewNotes(e.target.value)}
+                placeholder={reviewModal.status === 'APPROVED' ? 'Optional approval notes...' : 'Reason for rejecting this request...'}
+                maxLength={2000}
+                className="w-full px-3 py-2 text-sm border border-navy-200 rounded-lg focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

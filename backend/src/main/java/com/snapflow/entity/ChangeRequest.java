@@ -1,6 +1,8 @@
 package com.snapflow.entity;
 
 import com.snapflow.enums.ChangeRequestStatus;
+import com.snapflow.enums.ChangeRequestType;
+import com.snapflow.enums.CrewRole;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -23,6 +25,19 @@ public class ChangeRequest extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "booking_id", nullable = false)
     private Booking booking;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "request_type", nullable = false, length = 30)
+    @Builder.Default
+    private ChangeRequestType requestType = ChangeRequestType.GENERAL;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "requested_crew_role", length = 30)
+    private CrewRole requestedCrewRole;
+
+    @Column(name = "quantity")
+    @Builder.Default
+    private Integer quantity = 1;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "proposed_package_id")
@@ -71,3 +86,4 @@ public class ChangeRequest extends BaseEntity {
     @Builder.Default
     private List<AddOn> requestedAddOns = new ArrayList<>();
 }
+

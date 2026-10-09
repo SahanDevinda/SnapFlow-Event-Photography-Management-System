@@ -1,6 +1,8 @@
 package com.snapflow.dto.response;
 
 import com.snapflow.enums.ChangeRequestStatus;
+import com.snapflow.enums.ChangeRequestType;
+import com.snapflow.enums.CrewRole;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -20,6 +22,10 @@ public class ChangeRequestResponse {
     private Long id;
     private Long bookingId;
     private String bookingRef;
+    private ChangeRequestType requestType;
+    private CrewRole requestedCrewRole;
+    private String requestedCrewRoleLabel;
+    private Integer quantity;
     private Long proposedPackageId;
     private String proposedPackageName;
     private LocalDate proposedDate;

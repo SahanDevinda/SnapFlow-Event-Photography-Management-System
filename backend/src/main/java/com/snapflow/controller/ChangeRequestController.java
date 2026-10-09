@@ -38,6 +38,12 @@ public class ChangeRequestController {
         return new ResponseEntity<>(ApiResponse.success("Change request submitted", response), HttpStatus.CREATED);
     }
 
+    @GetMapping("/{id}")
+    @Operation(summary = "Get change request by ID")
+    public ResponseEntity<ApiResponse<ChangeRequestResponse>> getChangeRequestById(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(changeRequestService.getChangeRequestById(id)));
+    }
+
     @PutMapping("/{id}")
     @Operation(summary = "Edit a pending change request")
     public ResponseEntity<ApiResponse<ChangeRequestResponse>> updatePendingChangeRequest(
